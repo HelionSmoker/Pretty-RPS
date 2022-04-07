@@ -1,20 +1,37 @@
 import
+  os, #         commandLineParams(), paramStr()
+  random, #     randomize(), rand(), sample()
+  strutils, #   parseInt(), center()
   algorithm, #  reversed()
-  os, #         commandLineParams(), paramStr
-  strutils, #   parseInt()
-  random, #     randomize(), rand()
   terminal #    getch(), eraseScreen()
 
-proc catPad(a1, a2: array[14, seq[int]]): array[14, seq[int]] =
-  # The palm is the same for all states, so we just concatenate and pad
-  # the elements to 21 (max row length)
-  for i in 0..13:
-    result[i] = a1[i] & a2[i] & newSeq[int](21 - len(a1[i]) - len(a2[i]))
+proc getParamOrDef(default, param: string): string =
+  result = default
+  var i = commandLineParams().find(param)
+  if i != -1: result = paramStr(i+2)
 
-proc invert(a: array[14, seq[int]]): array[14, seq[int]] =
-  for i in 0..13: result[i] = reversed(a[i])
+randomize()
+let
+  STYLE = [
+    "",                                            # Blank
+    "[48;5;235m",                                 # Outline (black)
+    "[4" & $rand(1..7) & 'm',                     # Skin color (random)
+    "[0m"]                                        # Reset style
+  MODE = getParamOrDef("wins", "-m")               # Supported: 'wins' and 'points'.
+  GOAL = getParamOrDef("3", "-g").parseInt()       # Mode dependant.
 
 const
+  HEIGHT = 14
+  WIDTH = 21
+  MOVES = ['q', 'r', 'p', 's']
+  PROMT = "Enter your choice " & $MOVES & ": "
+  END_MSG = [
+    @[
+      "You know, I mean, you beat the system! I mean, you're an icon, man!"],
+    @[
+      "As usual, the forces of darkness have triumphed over good.",
+      "You were almost a Jill sandwich!",
+      "Ain’t nothing fair."]]
   PALM = [
     @[0, 0, 0, 3, 1, 1, 1, 1, 1],
     @[0, 0, 3, 1, 2, 2, 2, 2, 2, 1, 1, 1],
@@ -30,7 +47,22 @@ const
     @[1, 1, 2, 2, 2, 2, 2],
     @[0, 3, 1, 1, 2, 2, 2],
     @[0, 0, 0, 3, 1, 1, 1, 1, 1, 1, 1, 1]]
-  ROCK = catPad(PALM, [
+
+type
+  PixelMap = array[HEIGHT, seq[int]]
+  ArtStr = array[HEIGHT, string]
+
+proc catPad(a: PixelMap): PixelMap =
+  # The palm is the same for all states, so we just concatenate and pad
+  # the elements to 21 (max row length)c
+  for i in 0..13:
+    result[i] = PALM[i] & a[i] & newSeq[int](21 - len(PALM[i]) - len(a[i]))
+
+proc invert(a: PixelMap): PixelMap =
+  for i in 0..13: result[i] = reversed(a[i])
+
+const
+  ROCK = catPad([
     @[3],
     @[1, 3],
     @[1, 3],
@@ -45,7 +77,7 @@ const
     @[1, 2, 2, 2, 2, 1, 3],
     @[1, 2, 2, 2, 2, 1, 3],
     @[3]])
-  PAPER = catPad(PALM, [
+  PAPER = catPad([
     @[3],
     @[1, 1, 1, 1, 1, 3],
     @[2, 2, 2, 2, 1, 3],
@@ -60,7 +92,7 @@ const
     @[2, 2, 2, 2, 2, 2, 2, 2, 1, 3],
     @[2, 2, 2, 2, 2, 2, 2, 2, 1, 3],
     @[1, 1, 1, 3]])
-  SCISSORS = catPad(PALM, [
+  SCISSORS = catPad([
     @[3, 0, 0, 1, 1, 1, 1, 1, 1, 3],
     @[2, 2, 2, 2, 2, 2, 1, 3],
     @[2, 2, 2, 2, 2, 1, 3],
@@ -75,77 +107,56 @@ const
     @[1, 2, 2, 2, 2, 1, 3],
     @[1, 2, 2, 2, 2, 1, 3],
     @[3]])
-  STATES = [
-    ROCK, PAPER, SCISSORS,
-    invert(ROCK), invert(PAPER), invert(SCISSORS)]
-  MOVES = ['r', 'p', 's']
 
-let
-  MODE = block: # Supported: 'wins' and 'points'.
-    var mode = "wins"
-    var i = find(commandLineParams(), ("-m"))
-    if i != -1: mode = paramStr(i+2)
-    mode
-  GOAL = block: # Mode dependant.
-    var goal = 3
-    var i = find(commandLineParams(), ("-g"))
-    if i != -1: goal = parseInt(paramStr(i+2))
-    goal
+proc toStr(a: PixelMap): ArtStr =
+  for i in 0..HEIGHT - 1:
+    for col in a[i]:
+      result[i].add(STYLE[col] & "   ")
+    result[i].add("[0m")
+
+let STATES = [
+  toStr ROCK, toStr PAPER, toStr SCISSORS,
+  invert(ROCK).toStr(), invert(PAPER).toStr(), invert(SCISSORS).toStr()]
 
 var
   visuals = newStringOfCap(2000)
-  style = [
-    "",            # Blank
-    "[48;5;235m", # Outline (black)
-    "",            # Skin color (random)
-    "[0m"]        # Reset style
   move, counter: Natural
   score = [0, 0]
-  choice: char
 
-proc compileColors(list: seq[int]) =
-  for col in list:
-    visuals.add(style[col])
-    visuals.add("   ")
-
-randomize()
-proc catVisuals(move, counter: Natural) =
+proc catArt(move, counter: int) =
   visuals = ""
-  style[2] = "[4" & $rand(1..7) & 'm'
-
   for i in 0..13:
-    compileColors(STATES[move][i])
-    compileColors(STATES[counter][i])
+    visuals.add(STATES[move][i])
+    visuals.add(STATES[counter][i])
     visuals.add("[0m\n")
 
 while score[0] != GOAL and score[1] != GOAL:
-  catVisuals(0, 3) # Fist is default state
+  catArt(0, 3) # Fist is default state
 
   for i in 0..6: # Shake fist 3 times.
     eraseScreen()
     echo visuals
     if i mod 2 != 0: echo "\n\n\n"
-    sleep 200
+    sleep 180
 
-  stdout.write("Enter your choice (r, p, s): ")
-  choice = getch() # Accept only one char.
-
-  if choice == 'q': quit 0
-  for i in 0..high(MOVES):
-    if MOVES[i] == choice: move = i
+  stdout.write(PROMT)
+  move = MOVES.find(getch()) # find() - Return pos, getch() - Accept one char.
+  if move == 0 or move == -1: quit 0
 
   counter = rand(2)
-  case move - counter
-  of -2, 1: inc(score[0])
-  of -1, 2: inc(score[1])
+  case move - counter - 1
+  of -2, 1:
+    if MODE == "points": dec(score[1])
+    inc(score[0])
+  of -1, 2:
+    if MODE == "points": dec(score[0])
+    inc(score[1])
   else: discard # Draw
 
+  catArt(move - 1, counter + 3)
   eraseScreen()
-  catVisuals(move, counter + 3)
-  echo '\n', visuals, center($score[0] & " - " & $score[1], 122)
-  sleep 2000
+  echo '\n', visuals, center($score[0] & " - " & $score[1], WIDTH * 6)
+  sleep 1800
 
-if score[0] == 3:
-  echo "You know, I mean, you beat the system! I mean, you're an icon, man!".center(122)
-else:
-  echo "As usual, the forces of darkness have triumphed over good.".center(122)
+if score[0] == GOAL: echo END_MSG[0].sample().center(WIDTH * 6)
+else: echo END_MSG[1].sample().center(WIDTH * 6)
