@@ -32,7 +32,7 @@ const
       "As usual, the forces of darkness have triumphed over good.",
       "You were almost a Jill sandwich!",
       "Ain’t nothing fair."]]
-  PALM = [
+  PALM = [ # The palm is the same for all states
     @[0, 0, 0, 3, 1, 1, 1, 1, 1],
     @[0, 0, 3, 1, 2, 2, 2, 2, 2, 1, 1, 1],
     @[0, 3, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2],
@@ -53,10 +53,8 @@ type
   ArtStr = array[HEIGHT, string]
 
 proc catPad(a: PixelMap): PixelMap =
-  # The palm is the same for all states, so we just concatenate and pad
-  # the elements to 21 (max row length)c
   for i in 0..13:
-    result[i] = PALM[i] & a[i] & newSeq[int](21 - len(PALM[i]) - len(a[i]))
+    result[i] = PALM[i] & a[i] & newSeq[int](WIDTH - len(PALM[i]) - len(a[i]))
 
 proc invert(a: PixelMap): PixelMap =
   for i in 0..13: result[i] = reversed(a[i])
